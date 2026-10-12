@@ -8,7 +8,7 @@ using TicketMasterAPI.src.Domain.ValueObjects;
 
 namespace TicketMaster.Domain.Entities.EventAggregate;
 
-public class Event : AuditableEntity<Guid>
+public class Event : AggregateRoot
 {
     public string? Name { get; set; }
     public string? Description { get; set; }
@@ -17,9 +17,9 @@ public class Event : AuditableEntity<Guid>
     [JsonConverter(typeof(JsonStringEnumConverter))]
     public EventState EventState { get; set; }
 
-    public List<Session> Sessions { get; private set; } = [];
+    private readonly List<Session> _sessions = [];
 
-    public IReadOnlyCollection<Session> SessionsReadOnly => Sessions.AsReadOnly();
+    public IReadOnlyCollection<Session> Sessions => _sessions.AsReadOnly();
 
     private Event() { }
 
@@ -64,7 +64,7 @@ public class Event : AuditableEntity<Guid>
             return Result.Failure(EventError.UnavailableEvent);
 
         var session = new Session(Id, address, startDate, endDate);
-        Sessions.Add(session);
+        _sessions.Add(session);
 
         return Result.Success();
     }
@@ -76,7 +76,7 @@ public class Event : AuditableEntity<Guid>
         if (session == null) 
             return Result.Failure(SessionError.SessionNotFound);
 
-        var result = Sessions.Remove(session);
+        var result = _sessions.Remove(session);
         return result ? Result.Success() : Result.Failure(EventError.UnableToRemoveSession);
     }
 
@@ -119,7 +119,9 @@ public class Event : AuditableEntity<Guid>
         var result = session.PurchaseTicketLot(ticketLotId, quantity);
 
         if (result.IsSuccess)
-            AddDomainEvent(new PurchasedTicketEvent(Id, ticketLotId, customerId, quantity));
+            AddDomainEvent(new PurchaseTicketLotEvent(
+                Id, sessionId, ticketLotId, customerId, quantity, DateTimeOffset.UtcNow
+            ));
 
         return result;
     }
