@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using TicketMaster.Domain.Common;
+using TicketMaster.Domain.Entities;
 using TicketMaster.Domain.Entities.EventAggregate;
 using TicketMaster.Domain.Entities.OrderAggregate;
 
@@ -34,6 +35,10 @@ public class TicketMasterDbContext(
             entity.Property(e => e.Description).HasMaxLength(1000).IsRequired(false);
             entity.Property(e => e.Organizer).HasMaxLength(200).IsRequired(false);
             entity.Property(e => e.EventState).HasConversion<string>().IsRequired();
+            
+            entity.Navigation(e => e.Sessions)
+                .HasField("_sessions")
+                .UsePropertyAccessMode(PropertyAccessMode.Field);
 
             entity.HasMany(e => e.Sessions)
                   .WithOne(s => s.Event)
@@ -56,6 +61,10 @@ public class TicketMasterDbContext(
                 address.Property(a => a.ZipCode).HasColumnName("Address_ZipCode").HasMaxLength(10).IsRequired();
                 address.Property(a => a.Place).HasColumnName("Address_Place").HasMaxLength(200).IsRequired();
             });
+
+            entity.Navigation(s => s.TicketLots)
+                .HasField("_ticketLots")
+                .UsePropertyAccessMode(PropertyAccessMode.Field);
 
             entity.HasMany(s => s.TicketLots)
                   .WithOne(t => t.Session)
