@@ -5,16 +5,17 @@ using TicketMaster.Domain.Entities.EventAggregate;
 namespace TicketMaster.Domain.Interfaces;
 
 
-public interface IEventRepository
+public interface IEventRepository : IRepository<Event>
 {
 
-    Task<Event?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default);
+    new Task<Event?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default);
 
-    Task<IReadOnlyList<Event>> ListAsync(ISpecification<Event>? spec = null, CancellationToken cancellationToken = default);
+    new Task<IReadOnlyList<Event>> ListAsync(ISpecification<Event>? spec = null, CancellationToken cancellationToken = default);
+    new Task<int> CountAsync(ISpecification<Event>? spec = null, CancellationToken cancellationToken = default);
 
-    Task<int> CountAsync(ISpecification<Event>? spec = null, CancellationToken cancellationToken = default);
+    new Task AddAsync(Event @event, CancellationToken cancellationToken = default);
 
-    Task AddAsync(Event @event, CancellationToken cancellationToken = default);
+    new void Add(Event @event);
     
-    void Delete(Event @event);
+    new void Delete(Event @event);
 }
