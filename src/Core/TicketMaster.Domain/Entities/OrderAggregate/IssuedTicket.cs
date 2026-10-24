@@ -1,31 +1,27 @@
 using TicketMaster.Domain.Common;
-using TicketMaster.Domain.Shared;
 
 namespace TicketMaster.Domain.Entities.OrderAggregate;
 
-
 public class IssuedTicket : AuditableEntity<Guid>
 {
-    public Order? Order { get; } = null!;
-    public Guid OrderId { get; }
-    public string? ConsumeCodeQR { get; }
+    public string ConsumeCodeQR { get; private set; } = string.Empty;
     public bool Used { get; private set; }
 
     private IssuedTicket() { }
 
-    public IssuedTicket(string consumeCodeQR)
+    // Construtor internal: Apenas o Order pode fabricar ingressos
+    internal IssuedTicket(string consumeCodeQR)
     {
         ConsumeCodeQR = consumeCodeQR;
         Used = false;
     }
 
-    public Result UseTicket()
+    // Método internal: Apenas o Order pode validar o uso do ingresso
+    internal Result UseTicket()
     {
-        if (Used) return Result.Failure(OrderError.UsedTicket);
+        if (Used) return Result.Failure(IssuedTicketError.IssuedTicketAlreadyUsed);
 
         Used = true;
-
         return Result.Success();
     }
-    
 }
