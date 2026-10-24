@@ -1,6 +1,4 @@
-using TicketMaster.Domain.Shared;
-
-namespace TicketMaster.Domain.Shared;
+namespace TicketMaster.Domain.Common;
 
 public record Result
 {
