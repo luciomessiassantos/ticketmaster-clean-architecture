@@ -3,9 +3,11 @@ using TicketMaster.Domain.Common;
 namespace TicketMaster.Domain.Events;
 
 
-public record PurchasedTicketEvent(
+public record PurchaseTicketLotEvent(
     Guid EventId,
-    Guid TicketId,
-    Guid UserId,
-    int Quantity
+    Guid SessionId,
+    Guid TicketLotId,
+    Guid CustomerId,
+    int Quantity,
+    DateTimeOffset Timestamp
 ) : IDomainEvent;

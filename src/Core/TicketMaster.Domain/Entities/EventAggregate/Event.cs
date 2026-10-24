@@ -1,21 +1,20 @@
 using System.Text.Json.Serialization;
 using TicketMaster.Domain.Common;
 using TicketMaster.Domain.Events;
-using TicketMaster.Domain.Shared;
+using TicketMaster.Domain.ValueObjects;
 using TicketMasterAPI.src.Domain.Enums;
-using TicketMasterAPI.src.Domain.ValueObjects;
 
 
 namespace TicketMaster.Domain.Entities.EventAggregate;
 
 public class Event : AggregateRoot
 {
-    public string? Name { get; set; }
-    public string? Description { get; set; }
-    public string? Organizer { get; set; }
+    public string? Name { get; private set; }
+    public string? Description { get; private set; }
+    public string? Organizer { get; private set; }
 
     [JsonConverter(typeof(JsonStringEnumConverter))]
-    public EventState EventState { get; set; }
+    public EventState EventState { get; private set; }
 
     private readonly List<Session> _sessions = [];
 
@@ -32,35 +31,24 @@ public class Event : AggregateRoot
     }
 
     public void Publish() => EventState = EventState.Available;
-
     public void Cancel() => EventState = EventState.Cancelled;
-
     public void Unavailable() => EventState = EventState.Unavailable;
 
     public Result UpdateDetails(string? name, string? description, string? organizer)
     {
-        if (EventState != EventState.Available || EventState != EventState.Draft)
+        if (EventState != EventState.Available && EventState != EventState.Draft)
             return Result.Failure(EventError.UnavailableEvent);
 
-        if (!string.IsNullOrEmpty(name))
-            Name = name;
-        if (!string.IsNullOrEmpty(description))
-            Description = description;
-        
-        if (!string.IsNullOrEmpty(organizer))
-            Description = organizer;
+        if (!string.IsNullOrEmpty(name)) Name = name;
+        if (!string.IsNullOrEmpty(description)) Description = description;
+        if (!string.IsNullOrEmpty(organizer)) Organizer = organizer;
         
         return Result.Success();
     }
 
-
-    public Result RegisterSession(
-            Address? address,
-            DateTimeOffset? startDate,
-            DateTimeOffset? endDate
-        )
+    public Result RegisterSession(Address address, DateTimeOffset startDate, DateTimeOffset endDate)
     {
-        if (EventState != EventState.Available || EventState != EventState.Draft)
+        if (EventState != EventState.Available && EventState != EventState.Draft)
             return Result.Failure(EventError.UnavailableEvent);
 
         var session = new Session(Id, address, startDate, endDate);
@@ -80,31 +68,45 @@ public class Event : AggregateRoot
         return result ? Result.Success() : Result.Failure(EventError.UnableToRemoveSession);
     }
 
-    public Result AddTicketLotToSession(
-        Guid sessionId,
-        int lot,
-        decimal price,
-        long initialQuantity,
-        TicketType type
+    public Result UpdateSession(
+        Guid sessionId, 
+        DateTimeOffset? startDate = null, 
+        DateTimeOffset? endDate = null, 
+        Address? newAddress = null
     )
     {
-        if (EventState != EventState.Available || EventState != EventState.Draft)
+        var session = _sessions.FirstOrDefault(s => s.Id == sessionId);
+        
+        if (session == null) 
+            return Result.Failure(SessionError.SessionNotFound);
+
+        if (EventState != EventState.Available && EventState != EventState.Draft)
+            return Result.Failure(EventError.UnavailableEvent);
+            
+        var updateResult = session.UpdateDetails(startDate, endDate, newAddress);
+
+        if (!updateResult.IsSuccess)
+            return Result.Failure(updateResult.Error!);
+
+        foreach (var domainEvent in updateResult.Value!)
+        {
+            AddDomainEvent(domainEvent);
+        }
+
+        return Result.Success();
+    }
+
+    public Result AddTicketLotToSession(Guid sessionId, int lot, decimal price, long initialQuantity, TicketType type)
+    {
+        if (EventState != EventState.Available && EventState != EventState.Draft)
             return Result.Failure(EventError.UnavailableEvent);
         
         var session = Sessions.FirstOrDefault(t => t.Id == sessionId);
 
         if (session == null) 
             return Result.Failure(SessionError.SessionNotFound);
-        
 
-        var result = session.AddTicketLot(
-            lot,
-            price,
-            initialQuantity,
-            type
-        );
-
-        return result;
+        return session.AddTicketLot(lot, price, initialQuantity, type);
     }
 
     public Result PurchaseTicket(Guid customerId, Guid sessionId, Guid ticketLotId, int quantity)
@@ -119,13 +121,8 @@ public class Event : AggregateRoot
         var result = session.PurchaseTicketLot(ticketLotId, quantity);
 
         if (result.IsSuccess)
-            AddDomainEvent(new PurchaseTicketLotEvent(
-                Id, sessionId, ticketLotId, customerId, quantity, DateTimeOffset.UtcNow
-            ));
+            AddDomainEvent(new PurchaseTicketLotEvent(Id, sessionId, ticketLotId, customerId, quantity, DateTimeOffset.UtcNow));
 
         return result;
     }
-
-
-
 }

@@ -1,5 +1,5 @@
 using TicketMaster.Domain.Common;
-using TicketMaster.Domain.Shared;
+using TicketMaster.Domain.Events;
 using TicketMasterAPI.src.Domain.Enums;
 
 namespace TicketMaster.Domain.Entities.EventAggregate;
@@ -37,12 +37,50 @@ public class TicketLot : AuditableEntity<Guid>
     public Result Purchase(int quantity)
     {
         if (Remaining <= 0) 
-            return Result.Failure(TicketLotError.TicketLotOutOfStock);
+            return Result<List<IDomainEvent>>.Failure(TicketLotError.TicketLotOutOfStock);
         if (!Available)
-            return Result.Failure(TicketLotError.TicketLotUnavailable);
+            return Result<List<IDomainEvent>>.Failure(TicketLotError.TicketLotUnavailable);
         
         Remaining -= quantity;
 
+        if (Remaining == 0) Unavailable();
+
         return Result.Success();
     }
+
+
+    public Result UpdateDetails(
+        int? newLot = null,
+        decimal? newPrice = null,
+        TicketType? newType = null
+    )
+    {
+        if (newLot != null)
+        {
+            if (newLot <= 0)
+            {
+                return Result.Failure(TicketLotError.InvalidTicketLotNumber);
+            }
+            Lot = (int) newLot;
+        }
+
+        if (newPrice != null)
+        {
+            if (newPrice <= 0)
+            {
+                return Result.Failure(TicketLotError.InvalidTicketLotPrice);
+            }
+            Price = (decimal) newPrice;
+        }
+
+        if (newType != null)
+        {
+            Type = (TicketType) newType;
+        }
+
+        return Result.Success();
+    }
+
+    
+
 }

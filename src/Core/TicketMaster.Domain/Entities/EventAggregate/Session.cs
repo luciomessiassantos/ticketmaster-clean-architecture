@@ -1,9 +1,8 @@
-using System.Text.Json.Serialization;
 using TicketMaster.Domain.Common;
 using TicketMaster.Domain.Enums;
-using TicketMaster.Domain.Shared;
+using TicketMaster.Domain.Events;
+using TicketMaster.Domain.ValueObjects;
 using TicketMasterAPI.src.Domain.Enums;
-using TicketMasterAPI.src.Domain.ValueObjects;
 
 namespace TicketMaster.Domain.Entities.EventAggregate;
 
@@ -11,22 +10,22 @@ public class Session : AuditableEntity<Guid>
 {
     public Guid EventId { get; set; }
     public Event Event { get; set; } = null!;
-    public Address? Address { get; set; }
-    public DateTimeOffset? StartDate { get; set; }
-    public DateTimeOffset? EndDate { get; set; }
+    public Address Address { get; set; }
+    public DateTimeOffset StartDate { get; set; }
+    public DateTimeOffset EndDate { get; set; }
     public SessionState SessionState { get; private set; }
 
-    public List<TicketLot> TicketLots { get; private set; } = [];
+    private readonly List<TicketLot> _ticketLots = [];
 
-    public IReadOnlyList<TicketLot> TicketLotsReadonly => TicketLots.AsReadOnly();
+    public IReadOnlyList<TicketLot> TicketLots => _ticketLots.AsReadOnly();
 
     private Session() { }
 
     internal Session(
         Guid eventId, 
-        Address? address,
-        DateTimeOffset? startDate,
-        DateTimeOffset? endDate
+        Address address,
+        DateTimeOffset startDate,
+        DateTimeOffset endDate
         )
     {
         EventId = eventId;
@@ -60,7 +59,7 @@ public class Session : AuditableEntity<Guid>
         
         var ticketLot = new TicketLot(Id, lot, price, initialQuantity, type);
 
-        TicketLots.Add(ticketLot);
+        _ticketLots.Add(ticketLot);
 
         return Result<TicketLot>.Success(ticketLot);
     }
@@ -80,7 +79,7 @@ public class Session : AuditableEntity<Guid>
         if (ticketLot == null)
             return Result.Failure(TicketLotError.TicketLotNotFound);
 
-        TicketLots.Remove(ticketLot);
+        _ticketLots.Remove(ticketLot);
 
         return Result.Success();
     }
@@ -99,6 +98,52 @@ public class Session : AuditableEntity<Guid>
         var result = ticketLot.Purchase(quantity);
 
         return result;
+    }
+
+public Result<List<IDomainEvent>> UpdateDetails(
+        DateTimeOffset? startDate = null,
+        DateTimeOffset? endDate = null,
+        Address? newAddress = null
+    )
+    {
+        var domainEvents = new List<IDomainEvent>();
+
+        var test = SessionStateTest();
+        if (!test.IsSuccess) return Result<List<IDomainEvent>>.Failure(test.Error!);
+
+        if (startDate.HasValue) 
+            StartDate = startDate.Value;
+
+        if (endDate.HasValue && endDate.Value != EndDate)
+        {
+            EndDate = endDate.Value;
+            domainEvents.Add(new SessionRescheduleEvent(Id, EndDate));
+        }
+        
+        if (StartDate > EndDate)
+            return Result<List<IDomainEvent>>.Failure(SessionError.InvalidSessionDate);
+
+        if (newAddress != null && newAddress != Address) 
+        {
+            Address = newAddress;
+            // domainEvents.Add(new SessionAddressChangedEvent(Id, Address));
+        }
+    
+        return Result<List<IDomainEvent>>.Success(domainEvents);
+    }
+
+    public Result UpdateTicketLotDetails(
+        Guid ticketLotId, 
+        int? newLot = null,
+        decimal? newPrice = null,
+        TicketType? newType = null
+    )
+    {
+        var ticketLot = _ticketLots.FirstOrDefault(t => t.Id == ticketLotId);
+
+        if (ticketLot == null) return Result.Failure(TicketLotError.TicketLotNotFound);
+
+        return ticketLot.UpdateDetails(newLot, newPrice, newType);
     }
 
     private Result SessionStateTest()
